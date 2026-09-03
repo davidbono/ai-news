@@ -27,6 +27,13 @@ Accessible sur [penloup.eu/news-ai.php](https://penloup.eu/news-ai.php).
 
 ## Fichiers
 
+- `n8n/news-ai-quotidien.json` — export du workflow n8n "News IA quotidien"
+  (déclencheur quotidien 7h, recherche web + extraction structurée pour
+  l'actu et les deux classements, cours de bourse via l'API Yahoo Finance,
+  publication vers `news-ai.php`). Réimportable tel quel dans n8n ; les
+  identifiants de credentials référencés (OpenAI, jeton HTTP) devront être
+  remappés vers des credentials existants sur l'instance cible, le secret
+  lui-même n'étant jamais inclus dans l'export.
 - `news-ai.php` — l'application (rendu de la page en GET, réception de la
   publication quotidienne du workflow n8n en POST).
 - `news-ai-archives.php` — index des archives (éditions quotidiennes +

@@ -1,0 +1,525 @@
+{
+  "name": "News IA quotidien",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "trigger-newsai-1",
+      "name": "Chaque jour 7h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const today = $now.toFormat('dd/MM/yyyy');\nconst prompt = 'Nous sommes le ' + today + '. Tu es un journaliste tech specialise en intelligence artificielle. Utilise la recherche web pour trouver, pour chacune des entreprises suivantes : Google, Apple, OpenAI, Anthropic, Mistral AI, DeepSeek, les 5 actualites les plus recentes et les plus notables concernant l\\'intelligence artificielle (nouveaux modeles, produits, annonces, partenariats, recherche). Pour chaque entreprise, regroupe ses actualites sous un intertitre avec le nom exact de l\\'entreprise (par exemple \\'OpenAI:\\'). Pour chaque actualite, ecris un paragraphe separe donnant : le titre de l\\'article, le nom du site source, la date de publication si connue, un resume en 1-2 phrases, et cite la page web qui te sert de source pour cette information. Privilegie les actualites des deux dernieres semaines. Verifie via la recherche web que chaque actualite est reelle et recente. N\\'invente jamais une actualite ; si tu ne trouves pas assez d\\'actualites recentes pour une entreprise, indique-le simplement pour cette entreprise plutot que d\\'en inventer.';\n\nconst body = {\n  model: 'gpt-4.1',\n  tools: [{ type: 'web_search' }],\n  input: prompt,\n};\n\nreturn [{ json: { body } }];\n"
+      },
+      "id": "code-prep-news-1",
+      "name": "Preparer recherche actualites",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "id": "openai-news-1",
+      "name": "Rechercher actualites (OpenAI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        300
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "NJfF5hjqFfDerwuU",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst output = response.output || [];\nlet text = '';\nlet annotations = [];\nfor (const item of output) {\n  if (item.type === 'message' && Array.isArray(item.content)) {\n    for (const c of item.content) {\n      if (c.type === 'output_text') {\n        text = c.text || '';\n        annotations = c.annotations || [];\n      }\n    }\n  }\n}\n\nconst sorted = annotations.filter(a => a.type === 'url_citation' && a.url).sort((a, b) => b.end_index - a.end_index);\nfor (const a of sorted) {\n  const insert = ' (Source: ' + a.url + ')';\n  text = text.slice(0, a.end_index) + insert + text.slice(a.end_index);\n}\n\nreturn [{ json: { annotated_text: text } }];\n"
+      },
+      "id": "code-insert-citations-news-1",
+      "name": "Inserer citations actualites",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const today = $now.toFormat('dd/MM/yyyy');\nconst prompt = 'Nous sommes le ' + today + '. Utilise la recherche web pour etablir le classement actuel des 10 meilleurs grands modeles de langage (LLM), toutes entreprises confondues (OpenAI, Google, Anthropic, Meta, Mistral AI, DeepSeek, xAI, etc.), en te basant sur des classements/benchmarks publics reconnus (par exemple LMArena / Chatbot Arena, ou des comparatifs recents de la presse tech specialisee). Pour chaque modele du classement, indique dans un paragraphe separe : son rang, son nom exact, l\\'entreprise qui l\\'a developpe, et une note courte (une phrase) precisant son point fort ou son score si connu. Cite la ou les pages qui te servent de source pour ce classement. Utilise des informations aussi recentes que possible.';\n\nconst body = {\n  model: 'gpt-4.1',\n  tools: [{ type: 'web_search' }],\n  input: prompt,\n};\n\nreturn [{ json: { body } }];\n"
+      },
+      "id": "code-prep-ranking-1",
+      "name": "Preparer recherche classement LLM",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "id": "openai-ranking-1",
+      "name": "Rechercher classement LLM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        300
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "NJfF5hjqFfDerwuU",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst output = response.output || [];\nlet text = '';\nlet annotations = [];\nfor (const item of output) {\n  if (item.type === 'message' && Array.isArray(item.content)) {\n    for (const c of item.content) {\n      if (c.type === 'output_text') {\n        text = c.text || '';\n        annotations = c.annotations || [];\n      }\n    }\n  }\n}\n\nconst sorted = annotations.filter(a => a.type === 'url_citation' && a.url).sort((a, b) => b.end_index - a.end_index);\nfor (const a of sorted) {\n  const insert = ' (Source: ' + a.url + ')';\n  text = text.slice(0, a.end_index) + insert + text.slice(a.end_index);\n}\n\nreturn [{ json: { annotated_text: text } }];\n"
+      },
+      "id": "code-insert-citations-ranking-1",
+      "name": "Inserer citations classement",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const news = $('Inserer citations actualites').item.json.annotated_text || '';\nconst ranking = $('Inserer citations classement').item.json.annotated_text || '';\nconst harness = $('Inserer citations harness').item.json.annotated_text || '';\nconst combined = '=== ACTUALITES PAR ENTREPRISE ===\\n' + news\n  + '\\n\\n=== CLASSEMENT DES MEILLEURS LLM ===\\n' + ranking\n  + '\\n\\n=== CLASSEMENT DES MEILLEURS HARNESSES (AGENTS DE CODE) ===\\n' + harness;\nreturn [{ json: { combined_text: combined } }];\n"
+      },
+      "id": "code-merge-1",
+      "name": "Fusionner recherches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $input.first().json.combined_text || '';\nconst prompt = 'Voici un texte en trois parties : des actualites IA regroupees par entreprise (Google, Apple, OpenAI, Anthropic, Mistral AI, DeepSeek), un classement des meilleurs LLM, puis un classement des meilleurs \"harnesses\"/agents de code (Claude Code, Cursor, etc.). Des mentions \"(Source: URL)\" indiquent l\\'URL de la page web la plus proche pour l\\'information qui precede. Extrait ce contenu sous forme structuree selon le schema fourni. Pour chaque actualite, mets-la dans le tableau correspondant a son entreprise (google, apple, openai, anthropic, mistral, deepseek) ; le champ link doit reprendre telle quelle l\\'URL \"(Source: ...)\" la plus proche et la plus pertinente pour cette actualite precise, ou une chaine vide si aucune URL claire n\\'y est associee. Pour les deux classements, respecte l\\'ordre de rang indique dans le texte ; le champ note ne doit contenir que le point fort/score, jamais de mention \"(Source: ...)\" ni d\\'URL brute (le schema n\\'a pas de champ pour la source des classements, donc omets-la simplement). Ne modifie aucun fait et n\\'ajoute aucune actualite, aucun modele ni aucun outil qui ne serait pas deja present dans le texte.\\n\\nTexte:\\n' + text;\n\nconst newsItemSchema = {\n  type: 'object',\n  properties: {\n    title: { type: 'string' },\n    link: { type: 'string' },\n    source: { type: 'string' },\n    published_at: { type: 'string' },\n    summary: { type: 'string' },\n  },\n  required: ['title', 'link', 'source', 'published_at', 'summary'],\n  additionalProperties: false,\n};\n\nconst body = {\n  model: 'gpt-4.1',\n  input: prompt,\n  text: {\n    format: {\n      type: 'json_schema',\n      name: 'news_ai_digest',\n      strict: true,\n      schema: {\n        type: 'object',\n        properties: {\n          news: {\n            type: 'object',\n            properties: {\n              google: { type: 'array', items: newsItemSchema },\n              apple: { type: 'array', items: newsItemSchema },\n              openai: { type: 'array', items: newsItemSchema },\n              anthropic: { type: 'array', items: newsItemSchema },\n              mistral: { type: 'array', items: newsItemSchema },\n              deepseek: { type: 'array', items: newsItemSchema },\n            },\n            required: ['google', 'apple', 'openai', 'anthropic', 'mistral', 'deepseek'],\n            additionalProperties: false,\n          },\n          ranking: {\n            type: 'array',\n            items: {\n              type: 'object',\n              properties: {\n                rank: { type: 'integer' },\n                model: { type: 'string' },\n                company: { type: 'string' },\n                note: { type: 'string' },\n              },\n              required: ['rank', 'model', 'company', 'note'],\n              additionalProperties: false,\n            },\n          },\n          harness_ranking: {\n            type: 'array',\n            items: {\n              type: 'object',\n              properties: {\n                rank: { type: 'integer' },\n                name: { type: 'string' },\n                company: { type: 'string' },\n                note: { type: 'string' },\n              },\n              required: ['rank', 'name', 'company', 'note'],\n              additionalProperties: false,\n            },\n          },\n        },\n        required: ['news', 'ranking', 'harness_ranking'],\n        additionalProperties: false,\n      },\n    },\n  },\n};\n\nreturn [{ json: { body } }];\n\n"
+      },
+      "id": "code-prep-extract-1",
+      "name": "Preparer extraction structuree",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "id": "openai-extract-1",
+      "name": "Extraire structure (OpenAI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        300
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "NJfF5hjqFfDerwuU",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nlet text = '';\nconst output = response.output || [];\nfor (const item of output) {\n  if (item.type === 'message' && Array.isArray(item.content)) {\n    for (const c of item.content) {\n      if (c.type === 'output_text' && c.text) text += c.text;\n    }\n  }\n}\nif (!text && response.output_text) text = response.output_text;\n\ntext = text.trim();\nif (text.startsWith('```')) {\n  text = text.replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/, '');\n}\n\nlet parsed = {};\ntry {\n  parsed = JSON.parse(text);\n} catch (e) {\n  parsed = {};\n}\n\n// Same manual-string-parsing link filter as the art-actu newsletter\n// workflow's \"Extraire JSON expositions\" node: the URL constructor isn't\n// reliably available in n8n's Code node sandbox, which previously made\n// every single link silently fail and get rejected regardless of content.\nfunction isLowValueLink(link) {\n  const noFragment = link.split('#')[0];\n  const noQuery = noFragment.split('?')[0];\n  const afterProtocol = noQuery.replace(/^https?:\\/\\//i, '');\n  const slashIdx = afterProtocol.indexOf('/');\n  const path = slashIdx === -1 ? '' : afterProtocol.slice(slashIdx);\n  const trimmed = path.replace(/\\/+$/, '');\n  if (trimmed === '') return true;\n  const segments = trimmed.split('/').filter(Boolean);\n  const last = (segments[segments.length - 1] || '').toLowerCase();\n  const generic = ['recherche','search','agenda','actualites','actualite','news','accueil','home','index','blog','blogs'];\n  if (generic.includes(last)) return true;\n  if (segments.length === 1 && /^[a-z]{2}$/.test(last)) return true;\n  return false;\n}\n\n// OpenAI's web_search tool appends its own \"?utm_source=openai\" tracking\n// param to every citation URL — drop utm_* params before storing/showing\n// the link, they're noise for our readers and not something worth\n// telling the destination site.\nfunction stripUtmParams(link) {\n  const [base, query] = link.split('?');\n  if (!query) return link;\n  const kept = query.split('&').filter(p => !/^utm_/i.test(p));\n  return kept.length ? base + '?' + kept.join('&') : base;\n}\n\nfunction cleanNewsList(list) {\n  if (!Array.isArray(list)) return [];\n  const seenUrls = new Set();\n  return list\n    .filter(it => it && it.title && typeof it.link === 'string' && /^https?:\\/\\//i.test(it.link) && !isLowValueLink(it.link))\n    .map(it => ({ ...it, link: stripUtmParams(it.link) }))\n    .filter(it => {\n      if (seenUrls.has(it.link)) return false;\n      seenUrls.add(it.link);\n      return true;\n    })\n    .slice(0, 5)\n    .map(it => ({\n      title: String(it.title),\n      url: String(it.link),\n      source: String(it.source || ''),\n      published_at: String(it.published_at || ''),\n      summary: String(it.summary || ''),\n    }));\n}\n\nconst newsRaw = (parsed && parsed.news) || {};\nconst news = {\n  google: cleanNewsList(newsRaw.google),\n  apple: cleanNewsList(newsRaw.apple),\n  openai: cleanNewsList(newsRaw.openai),\n  anthropic: cleanNewsList(newsRaw.anthropic),\n  mistral: cleanNewsList(newsRaw.mistral),\n  deepseek: cleanNewsList(newsRaw.deepseek),\n};\n\n// The ranking schema has no dedicated source-link field, but the model\n// sometimes embeds the raw \"(Source: URL)\" citation marker straight into\n// the note text anyway — strip it rather than relying on the prompt alone\n// to keep the model from doing that.\nfunction stripSourceMarkers(text) {\n  return text.replace(/\\s*\\(?Source\\s*:\\s*https?:\\/\\/\\S+\\)?/gi, '').trim();\n}\n\nconst rankingRaw = Array.isArray(parsed.ranking) ? parsed.ranking : [];\nconst ranking = rankingRaw\n  .filter(r => r && r.model)\n  .map(r => ({\n    rank: Number(r.rank) || 0,\n    model: String(r.model),\n    company: String(r.company || ''),\n    note: stripSourceMarkers(String(r.note || '')),\n  }))\n  .sort((a, b) => a.rank - b.rank)\n  .slice(0, 10);\n\nconst harnessRankingRaw = Array.isArray(parsed.harness_ranking) ? parsed.harness_ranking : [];\nconst harness_ranking = harnessRankingRaw\n  .filter(r => r && r.name)\n  .map(r => ({\n    rank: Number(r.rank) || 0,\n    name: String(r.name),\n    company: String(r.company || ''),\n    note: stripSourceMarkers(String(r.note || '')),\n  }))\n  .sort((a, b) => a.rank - b.rank)\n  .slice(0, 10);\n\nreturn [{ json: { news, ranking, harness_ranking } }];\n\n"
+      },
+      "id": "code-extract-json-1",
+      "name": "Extraire JSON news",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://query1.finance.yahoo.com/v8/finance/chart/GOOGL?interval=1d&range=1d",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (compatible; penloup-news-ai/1.0)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-stock-google-1",
+      "name": "Recuperer cours Google",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=1d",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (compatible; penloup-news-ai/1.0)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-stock-apple-1",
+      "name": "Recuperer cours Apple",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const newsData = $('Extraire JSON news').item.json;\nconst today = $now.toFormat('yyyy-MM-dd');\n\n// Yahoo Finance's public chart endpoint needs no API key/signup — same\n// \"no keys to manage\" preference as Nominatim/OSM elsewhere on this site.\nfunction parseYahoo(resp) {\n  try {\n    const meta = resp.chart.result[0].meta;\n    if (typeof meta.regularMarketPrice !== 'number') return null;\n    return {\n      price: meta.regularMarketPrice,\n      currency: meta.currency || 'USD',\n      change_percent: typeof meta.regularMarketChangePercent === 'number' ? meta.regularMarketChangePercent : null,\n      as_of: today,\n    };\n  } catch (e) {\n    return null;\n  }\n}\n\nconst googleStock = parseYahoo($('Recuperer cours Google').item.json);\nconst appleStock = parseYahoo($('Recuperer cours Apple').item.json);\n\nconst stocks = {};\nif (googleStock) stocks.google = googleStock;\nif (appleStock) stocks.apple = appleStock;\n\nconst payload = {\n  date: today,\n  news: newsData.news,\n  ranking: newsData.ranking,\n  harness_ranking: newsData.harness_ranking,\n  stocks: stocks,\n};\n\nreturn [{ json: { payload } }];\n\n"
+      },
+      "id": "code-build-payload-1",
+      "name": "Construire payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://penloup.eu/news-ai.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {}
+      },
+      "id": "http-publish-newsai-1",
+      "name": "Publier sur news-ai",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3080,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cVVGeU7NtFKT4yaj",
+          "name": "News AI Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const today = $now.toFormat('dd/MM/yyyy');\nconst prompt = 'Nous sommes le ' + today + '. Utilise la recherche web pour etablir le classement actuel des 8 meilleurs \"harnesses\" / agents de code IA en ligne de commande ou integres a un IDE (par exemple Claude Code, Codex CLI, Cursor, GitHub Copilot, Windsurf, Aider, Gemini CLI, Cline, etc. — la liste n\\'est pas limitative), en te basant sur des comparatifs, benchmarks ou retours d\\'experience publics recents. Pour chaque outil du classement, indique dans un paragraphe separe : son rang, son nom exact, l\\'entreprise qui le developpe, et une note courte (une phrase) precisant son point fort (autonomie, qualite du code produit, integration, rapidite, etc.) ou un score si connu. Cite la ou les pages qui te servent de source pour ce classement. Utilise des informations aussi recentes que possible.';\n\nconst body = {\n  model: 'gpt-4.1',\n  tools: [{ type: 'web_search' }],\n  input: prompt,\n};\n\nreturn [{ json: { body } }];\n"
+      },
+      "id": "code-prep-harness-1",
+      "name": "Preparer recherche harness",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "id": "openai-harness-1",
+      "name": "Rechercher harness (OpenAI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        460
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "NJfF5hjqFfDerwuU",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst output = response.output || [];\nlet text = '';\nlet annotations = [];\nfor (const item of output) {\n  if (item.type === 'message' && Array.isArray(item.content)) {\n    for (const c of item.content) {\n      if (c.type === 'output_text') {\n        text = c.text || '';\n        annotations = c.annotations || [];\n      }\n    }\n  }\n}\n\nconst sorted = annotations.filter(a => a.type === 'url_citation' && a.url).sort((a, b) => b.end_index - a.end_index);\nfor (const a of sorted) {\n  const insert = ' (Source: ' + a.url + ')';\n  text = text.slice(0, a.end_index) + insert + text.slice(a.end_index);\n}\n\nreturn [{ json: { annotated_text: text } }];\n"
+      },
+      "id": "code-insert-citations-harness-1",
+      "name": "Inserer citations harness",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        460
+      ]
+    }
+  ],
+  "connections": {
+    "Chaque jour 7h": {
+      "main": [
+        [
+          {
+            "node": "Preparer recherche actualites",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparer recherche actualites": {
+      "main": [
+        [
+          {
+            "node": "Rechercher actualites (OpenAI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rechercher actualites (OpenAI)": {
+      "main": [
+        [
+          {
+            "node": "Inserer citations actualites",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inserer citations actualites": {
+      "main": [
+        [
+          {
+            "node": "Preparer recherche classement LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparer recherche classement LLM": {
+      "main": [
+        [
+          {
+            "node": "Rechercher classement LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rechercher classement LLM": {
+      "main": [
+        [
+          {
+            "node": "Inserer citations classement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inserer citations classement": {
+      "main": [
+        [
+          {
+            "node": "Preparer recherche harness",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fusionner recherches": {
+      "main": [
+        [
+          {
+            "node": "Preparer extraction structuree",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparer extraction structuree": {
+      "main": [
+        [
+          {
+            "node": "Extraire structure (OpenAI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraire structure (OpenAI)": {
+      "main": [
+        [
+          {
+            "node": "Extraire JSON news",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraire JSON news": {
+      "main": [
+        [
+          {
+            "node": "Recuperer cours Google",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recuperer cours Google": {
+      "main": [
+        [
+          {
+            "node": "Recuperer cours Apple",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recuperer cours Apple": {
+      "main": [
+        [
+          {
+            "node": "Construire payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construire payload": {
+      "main": [
+        [
+          {
+            "node": "Publier sur news-ai",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparer recherche harness": {
+      "main": [
+        [
+          {
+            "node": "Rechercher harness (OpenAI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rechercher harness (OpenAI)": {
+      "main": [
+        [
+          {
+            "node": "Inserer citations harness",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inserer citations harness": {
+      "main": [
+        [
+          {
+            "node": "Fusionner recherches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}
