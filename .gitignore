@@ -1,0 +1,13 @@
+# Secret (publish token) — never in the repo, only on the server.
+config.php
+
+# Runtime data, rebuilt daily by the n8n workflow.
+news.db
+news.db-wal
+news.db-shm
+
+# Daily static snapshots, auto-generated output rather than source — see
+# lib.php's archive_current_page(). Hand-written pages placed directly in
+# archives/ (e.g. redwood-hugging-face-incident-fr.php and its images/)
+# are NOT matched by this pattern and stay tracked.
+archives/news-ai-????-??-??.php
